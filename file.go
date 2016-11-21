@@ -35,7 +35,7 @@ func newFileOutput(path string) (*FileOutput, error) {
 
 	s := u.Query().Get("timeout")
 	if s == "" {
-		timeout = 100 * time.Millisecond
+		timeout = time.Second
 	} else {
 		timeout, err = time.ParseDuration(s)
 		if err != nil {
