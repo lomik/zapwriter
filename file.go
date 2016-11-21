@@ -2,17 +2,18 @@ package zapwriter
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"syscall"
 	"time"
 )
 
-const fileCheckInterval = 100 * time.Millisecond
-
 // with external rotate support
 type FileOutput struct {
 	sync.Mutex
+	timeout   time.Duration
+	interval  time.Duration
 	checkNext time.Time
 	f         *os.File
 	path      string // filename
@@ -23,15 +24,46 @@ type FileOutput struct {
 }
 
 func newFileOutput(path string) (*FileOutput, error) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	u, err := url.Parse(path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var timeout time.Duration
+	var interval time.Duration
+
+	s := u.Query().Get("timeout")
+	if s == "" {
+		timeout = 100 * time.Millisecond
+	} else {
+		timeout, err = time.ParseDuration(s)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s = u.Query().Get("interval")
+	if s == "" {
+		interval = time.Second
+	} else {
+		interval, err = time.ParseDuration(s)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	f, err := os.OpenFile(u.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
 
 	r := &FileOutput{
-		checkNext: time.Now().Add(fileCheckInterval),
+		checkNext: time.Now().Add(timeout),
+		timeout:   timeout,
+		interval:  interval,
 		f:         f,
-		path:      path,
+		path:      u.Path,
 		exit:      make(chan interface{}),
 	}
 
@@ -49,7 +81,7 @@ func File(path string) (*FileOutput, error) {
 }
 
 func (r *FileOutput) reopenChecker(exit chan interface{}) {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
 	for {
@@ -84,7 +116,7 @@ func (r *FileOutput) check() {
 		return
 	}
 
-	r.checkNext = time.Now().Add(fileCheckInterval)
+	r.checkNext = time.Now().Add(r.timeout)
 
 	fInfo, err := r.f.Stat()
 	if err != nil {
