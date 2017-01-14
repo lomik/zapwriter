@@ -2,6 +2,7 @@ package zapwriter
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/uber-go/zap"
@@ -18,7 +19,8 @@ func TestMixedEncoder(t *testing.T) {
 
 	logger.Error("test", zap.String("key", "value"))
 
-	if buf.String()[20:] != "] E test {\"key\":\"value\"}\n" {
+	if buf.String()[26:] != "] E test {\"key\":\"value\"}\n" {
+		fmt.Println(buf.String())
 		t.FailNow()
 	}
 }

@@ -52,7 +52,7 @@ func TestFileMove(t *testing.T) {
 	f, path, dir, tearDown := fileOpen(t)
 	defer tearDown()
 	os.Rename(path, filepath.Join(dir, "test_bak.log"))
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	f.Write([]byte("new message\n"))
 	c, err := ioutil.ReadFile(path)
@@ -67,7 +67,7 @@ func TestFileDelete(t *testing.T) {
 	f, path, _, tearDown := fileOpen(t)
 	defer tearDown()
 	os.Remove(path)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	f.Write([]byte("new message\n"))
 	c, err := ioutil.ReadFile(path)

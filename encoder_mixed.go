@@ -67,7 +67,7 @@ var defaultMixedFormatterLevel = map[zap.Level]string{
 }
 
 func defaultMixedFormatter(t time.Time, lvl zap.Level, msg string) string {
-	return "[" + t.Local().Format("2006-01-02 15:04:05") + "] " + defaultMixedFormatterLevel[lvl] + " " + msg + " "
+	return "[" + t.Local().Format(time.RFC3339) + "] " + defaultMixedFormatterLevel[lvl] + " " + msg + " "
 }
 
 // mixedEncoder is an Encoder implementation that writes JSON.
