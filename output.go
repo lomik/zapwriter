@@ -6,9 +6,12 @@ import (
 	"net/url"
 	"os"
 	"sync"
-
-	"github.com/uber-go/zap"
 )
+
+type WriteSyncer interface {
+	io.Writer
+	Sync() error
+}
 
 type closeable interface {
 	Close() (err error)
@@ -21,7 +24,7 @@ type Output interface {
 
 type output struct {
 	sync.RWMutex
-	out       zap.WriteSyncer
+	out       WriteSyncer
 	closeable bool
 	dsn       string
 }
@@ -42,20 +45,19 @@ func (o *output) apply(dsn string) error {
 		return nil
 	}
 
-	var newOut zap.WriteSyncer
+	var newOut WriteSyncer
 	var newCloseable bool
 
-	if dsn == "" || dsn == "stderr" {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return err
+	}
+
+	if u.Path == "" || u.Path == "stderr" {
 		newOut = os.Stderr
-	} else if dsn == "stdout" {
+	} else if u.Path == "stdout" {
 		newOut = os.Stdout
 	} else {
-		u, err := url.Parse(dsn)
-
-		if err != nil {
-			return err
-		}
-
 		if u.Scheme == "" || u.Scheme == "file" {
 			newOut, err = File(u.Path)
 			if err != nil {

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -173,4 +176,48 @@ func (r *FileOutput) Close() (err error) {
 	r.exitWg.Wait()
 	err = r.f.Close()
 	return
+}
+
+func PrepareFileForUser(filename string, owner *user.User) error {
+	u, err := url.Parse(filename)
+	if err != nil {
+		return err
+	}
+
+	if u.Path == "" || u.Path == "stderr" || u.Path == "stdout" {
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(u.Path), 0755); err != nil {
+		return err
+	}
+
+	fd, err := os.OpenFile(u.Path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if fd != nil {
+		fd.Close()
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(u.Path, 0644); err != nil {
+		return err
+	}
+	if owner != nil {
+
+		uid, err := strconv.ParseInt(owner.Uid, 10, 0)
+		if err != nil {
+			return err
+		}
+
+		gid, err := strconv.ParseInt(owner.Gid, 10, 0)
+		if err != nil {
+			return err
+		}
+
+		if err := os.Chown(u.Path, int(uid), int(gid)); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
