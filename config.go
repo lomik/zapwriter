@@ -110,7 +110,7 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 	encoderConfig := zapcore.EncoderConfig{
 		MessageKey:     "message",
 		LevelKey:       "level",
-		TimeKey:        "time",
+		TimeKey:        "timestamp",
 		NameKey:        "name",
 		CallerKey:      "caller",
 		StacktraceKey:  "stacktrace",
