@@ -15,9 +15,9 @@ type Manager interface {
 }
 
 type manager struct {
-	writers map[string]WriteSyncer
-	loggers map[string][]*zap.Logger
-	final   map[string]*zap.Logger // tee to loggers
+	writers map[string]WriteSyncer    // path -> writer
+	cores   map[string][]zapcore.Core // logger name -> cores
+	loggers map[string]*zap.Logger    // logger name -> logger
 }
 
 func NewManager(conf []*Config) (Manager, error) {
@@ -30,14 +30,14 @@ func CheckForManager(conf []*Config, allowNames []string) error {
 }
 
 func (m *manager) Default() *zap.Logger {
-	if logger, ok := m.final[""]; ok {
+	if logger, ok := m.loggers[""]; ok {
 		return logger
 	}
 	return zap.NewNop()
 }
 
 func (m *manager) Logger(logger string) *zap.Logger {
-	if logger, ok := m.final[logger]; ok {
+	if logger, ok := m.loggers[logger]; ok {
 		return logger
 	}
 	return m.Default()
@@ -72,13 +72,13 @@ func makeManager(conf []*Config, checkOnly bool, allowNames []string) (Manager, 
 		return nil, nil
 	}
 
-	// create writers
 	m := &manager{
 		writers: make(map[string]WriteSyncer),
-		loggers: make(map[string][]*zap.Logger),
-		final:   make(map[string]*zap.Logger),
+		cores:   make(map[string][]zapcore.Core),
+		loggers: make(map[string]*zap.Logger),
 	}
 
+	// create writers and cores
 	for _, cfg := range conf {
 		u, err := url.Parse(cfg.File)
 		if err != nil {
@@ -86,11 +86,11 @@ func makeManager(conf []*Config, checkOnly bool, allowNames []string) (Manager, 
 		}
 
 		if _, ok := m.loggers[cfg.Logger]; !ok {
-			m.loggers[cfg.Logger] = make([]*zap.Logger, 0)
+			m.cores[cfg.Logger] = make([]zapcore.Core, 0)
 		}
 
 		if strings.ToLower(u.Path) == "none" {
-			m.loggers[cfg.Logger] = append(m.loggers[cfg.Logger], zap.NewNop())
+			m.cores[cfg.Logger] = append(m.cores[cfg.Logger], zapcore.NewNopCore())
 			continue
 		}
 
@@ -108,9 +108,12 @@ func makeManager(conf []*Config, checkOnly bool, allowNames []string) (Manager, 
 			m.writers[u.Path] = ws
 		}
 
-		m.loggers[cfg.Logger] = append(m.loggers[cfg.Logger],
-			zap.New(zapcore.NewCore(encoder, ws, atomicLevel)),
-		)
+		m.cores[cfg.Logger] = append(m.cores[cfg.Logger], zapcore.NewCore(encoder, ws, atomicLevel))
+	}
+
+	// make loggers
+	for k, cores := range m.cores {
+		m.loggers[k] = zap.New(zapcore.NewTee(cores...))
 	}
 
 	return m, nil
