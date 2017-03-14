@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	Logger           string `toml:"logger"`            // handler name, default empty
 	File             string `toml:"file"`              // filename, "stderr", "stdout", "empty" (=="stderr"), "none"
 	Level            string `toml:"level"`             // "debug", "info", "warn", "error", "dpanic", "panic", and "fatal"
 	Encoding         string `toml:"encoding"`          // "json", "console"
@@ -41,15 +42,12 @@ func (c *Config) BuildLogger() (*zap.Logger, error) {
 	return c.build(false)
 }
 
-func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
+func (c *Config) encoder() (zapcore.Encoder, zap.AtomicLevel, error) {
 	u, err := url.Parse(c.File)
+	atomicLevel := zap.NewAtomicLevel()
 
 	if err != nil {
-		return nil, err
-	}
-
-	if strings.ToLower(u.Path) == "none" {
-		return zap.NewNop(), nil
+		return nil, atomicLevel, err
 	}
 
 	level := u.Query().Get("level")
@@ -59,10 +57,9 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 
 	var zapLevel zapcore.Level
 	if err := zapLevel.UnmarshalText([]byte(level)); err != nil {
-		return nil, err
+		return nil, atomicLevel, err
 	}
 
-	atomicLevel := zap.NewAtomicLevel()
 	atomicLevel.SetLevel(zapLevel)
 
 	encoding := u.Query().Get("encoding")
@@ -92,7 +89,7 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 	case "iso8601", "":
 		encoderTime = zapcore.ISO8601TimeEncoder
 	default:
-		return nil, fmt.Errorf("unknown time encoding %#v", encodingTime)
+		return nil, atomicLevel, fmt.Errorf("unknown time encoding %#v", encodingTime)
 	}
 
 	var encoderDuration zapcore.DurationEncoder
@@ -104,7 +101,7 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 	case "string":
 		encoderDuration = zapcore.StringDurationEncoder
 	default:
-		return nil, fmt.Errorf("unknown duration encoding %#v", encodingDuration)
+		return nil, atomicLevel, fmt.Errorf("unknown duration encoding %#v", encodingDuration)
 	}
 
 	encoderConfig := zapcore.EncoderConfig{
@@ -126,11 +123,30 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 	case "console":
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	default:
-		return nil, fmt.Errorf("unknown encoding %#v", encoding)
+		return nil, atomicLevel, fmt.Errorf("unknown encoding %#v", encoding)
+	}
+
+	return encoder, atomicLevel, nil
+}
+
+func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
+	u, err := url.Parse(c.File)
+
+	if err != nil {
+		return nil, err
+	}
+
+	encoder, atomicLevel, err := c.encoder()
+	if err != nil {
+		return nil, err
 	}
 
 	if checkOnly {
 		return nil, nil
+	}
+
+	if strings.ToLower(u.Path) == "none" {
+		return zap.NewNop(), nil
 	}
 
 	ws, err := New(c.File)
