@@ -4,10 +4,54 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+var _mutex sync.RWMutex
+var _manager Manager
+
+func init() {
+	_manager = &manager{
+		writers: make(map[string]WriteSyncer),
+		cores:   make(map[string][]zapcore.Core),
+		loggers: make(map[string]*zap.Logger),
+	}
+}
+
+func CheckConfig(conf []*Config, allowNames []string) error {
+	_, err := makeManager(conf, true, allowNames)
+	return err
+}
+
+func ApplyConfig(conf []*Config) error {
+	m, err := NewManager(conf)
+	if err != nil {
+		return err
+	}
+
+	_mutex.Lock()
+	_manager = m
+	_mutex.Unlock()
+
+	return nil
+}
+
+func Default() *zap.Logger {
+	_mutex.RLock()
+	m := _manager
+	_mutex.RUnlock()
+	return m.Default()
+}
+
+func Logger(logger string) *zap.Logger {
+	_mutex.RLock()
+	m := _manager
+	_mutex.RUnlock()
+	return m.Logger(logger)
+}
 
 type Manager interface {
 	Default() *zap.Logger
@@ -22,11 +66,6 @@ type manager struct {
 
 func NewManager(conf []*Config) (Manager, error) {
 	return makeManager(conf, false, nil)
-}
-
-func CheckForManager(conf []*Config, allowNames []string) error {
-	_, err := makeManager(conf, true, allowNames)
-	return err
 }
 
 func (m *manager) Default() *zap.Logger {
