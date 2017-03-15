@@ -30,12 +30,12 @@ func replaceGlobalManager(m Manager) Manager {
 	return prev
 }
 
-func CheckConfig(conf []*Config, allowNames []string) error {
+func CheckConfig(conf []Config, allowNames []string) error {
 	_, err := makeManager(conf, true, allowNames)
 	return err
 }
 
-func ApplyConfig(conf []*Config) error {
+func ApplyConfig(conf []Config) error {
 	m, err := NewManager(conf)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ type manager struct {
 	loggers map[string]*zap.Logger    // logger name -> logger
 }
 
-func NewManager(conf []*Config) (Manager, error) {
+func NewManager(conf []Config) (Manager, error) {
 	return makeManager(conf, false, nil)
 }
 
@@ -89,7 +89,7 @@ func (m *manager) Logger(name string) *zap.Logger {
 	return m.Default().Named(name)
 }
 
-func makeManager(conf []*Config, checkOnly bool, allowNames []string) (Manager, error) {
+func makeManager(conf []Config, checkOnly bool, allowNames []string) (Manager, error) {
 	// check names
 	if allowNames != nil {
 		namesMap := make(map[string]bool)
