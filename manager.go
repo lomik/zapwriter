@@ -14,11 +14,20 @@ var _mutex sync.RWMutex
 var _manager Manager
 
 func init() {
-	_manager = &manager{
+	replaceGlobalManager(&manager{
 		writers: make(map[string]WriteSyncer),
 		cores:   make(map[string][]zapcore.Core),
 		loggers: make(map[string]*zap.Logger),
-	}
+	})
+}
+
+func replaceGlobalManager(m Manager) Manager {
+	_mutex.Lock()
+	prev := _manager
+	_manager = m
+	zap.ReplaceGlobals(_manager.Default())
+	_mutex.Unlock()
+	return prev
 }
 
 func CheckConfig(conf []*Config, allowNames []string) error {
@@ -32,9 +41,7 @@ func ApplyConfig(conf []*Config) error {
 		return err
 	}
 
-	_mutex.Lock()
-	_manager = m
-	_mutex.Unlock()
+	replaceGlobalManager(m)
 
 	return nil
 }
@@ -75,11 +82,11 @@ func (m *manager) Default() *zap.Logger {
 	return zap.NewNop()
 }
 
-func (m *manager) Logger(logger string) *zap.Logger {
-	if logger, ok := m.loggers[logger]; ok {
-		return logger
+func (m *manager) Logger(name string) *zap.Logger {
+	if logger, ok := m.loggers[name]; ok {
+		return logger.Named(name)
 	}
-	return m.Default()
+	return m.Default().Named(name)
 }
 
 func makeManager(conf []*Config, checkOnly bool, allowNames []string) (Manager, error) {

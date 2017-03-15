@@ -5,12 +5,30 @@ import (
 	"testing"
 )
 
-func TestTesting(t *testing.T) {
+func TestTestCapture(t *testing.T) {
 	defer Test()()
 
 	Default().Info("info message")
 
-	if !strings.Contains(TestWritten(), "info message") {
+	if !strings.Contains(TestCapture(), "info message") {
+		t.FailNow()
+	}
+
+	if strings.Contains(TestCapture(), "info message") {
+		t.FailNow()
+	}
+}
+
+func TestTestString(t *testing.T) {
+	defer Test()()
+
+	Default().Info("info message")
+
+	if !strings.Contains(TestString(), "info message") {
+		t.FailNow()
+	}
+
+	if !strings.Contains(TestString(), "info message") {
 		t.FailNow()
 	}
 }

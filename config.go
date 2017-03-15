@@ -108,7 +108,7 @@ func (c *Config) encoder() (zapcore.Encoder, zap.AtomicLevel, error) {
 		MessageKey:     "message",
 		LevelKey:       "level",
 		TimeKey:        "timestamp",
-		NameKey:        "name",
+		NameKey:        "logger",
 		CallerKey:      "caller",
 		StacktraceKey:  "stacktrace",
 		EncodeLevel:    zapcore.CapitalLevelEncoder,
@@ -118,7 +118,9 @@ func (c *Config) encoder() (zapcore.Encoder, zap.AtomicLevel, error) {
 
 	var encoder zapcore.Encoder
 	switch strings.ToLower(encoding) {
-	case "json", "":
+	case "mixed", "":
+		encoder = NewMixedEncoder(encoderConfig)
+	case "json":
 		encoder = zapcore.NewJSONEncoder(encoderConfig)
 	case "console":
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
