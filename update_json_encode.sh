@@ -11,3 +11,5 @@ sed -i.bak 's/ ArrayMarshaler/ zapcore.ArrayMarshaler/' json_encoder.go
 sed -i.bak 's/ ObjectMarshaler/ zapcore.ObjectMarshaler/' json_encoder.go
 sed -i.bak 's/ Entry/ zapcore.Entry/' json_encoder.go
 sed -i.bak 's/ \[\]Field/ []zapcore.Field/' json_encoder.go
+
+rm -f json_encoder.go.bak

@@ -1,7 +1,7 @@
 package zapwriter
 
 import (
-	"fmt"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -15,5 +15,13 @@ func TestMixedEncoder(t *testing.T) {
 
 	zap.L().Named("carbonserver").Info("message text", zap.String("key", "value"))
 
-	fmt.Println(TestCapture())
+	if !strings.Contains(TestCapture(), `] INFO [carbonserver] message text {"key": "value"}`) {
+		t.FailNow()
+	}
+
+	zap.L().Info("message text", zap.String("key", "value"))
+
+	if !strings.Contains(TestCapture(), `] INFO message text {"key": "value"}`) {
+		t.FailNow()
+	}
 }
