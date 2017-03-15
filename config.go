@@ -22,7 +22,7 @@ func NewConfig() Config {
 	return Config{
 		File:             "stderr",
 		Level:            "info",
-		Encoding:         "json",
+		Encoding:         "mixed",
 		EncodingTime:     "iso8601",
 		EncodingDuration: "seconds",
 	}
