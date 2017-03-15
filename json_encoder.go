@@ -32,25 +32,26 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var _mixedPool = sync.Pool{New: func() interface{} {
-	return &mixedEncoder{}
+// For JSON-escaping; see jsonEncoder.safeAddString below.
+const _hex = "0123456789abcdef"
+
+var _jsonPool = sync.Pool{New: func() interface{} {
+	return &jsonEncoder{}
 }}
 
-var bufferpool = buffer.NewPool()
-
-func getMixedEncoder() *mixedEncoder {
-	return _mixedPool.Get().(*mixedEncoder)
+func getJSONEncoder() *jsonEncoder {
+	return _jsonPool.Get().(*jsonEncoder)
 }
 
-func putMixedEncoder(enc *mixedEncoder) {
+func putJSONEncoder(enc *jsonEncoder) {
 	enc.EncoderConfig = nil
 	enc.buf = nil
 	enc.spaced = false
 	enc.openNamespaces = 0
-	_mixedPool.Put(enc)
+	_jsonPool.Put(enc)
 }
 
-type mixedEncoder struct {
+type jsonEncoder struct {
 	*zapcore.EncoderConfig
 	buf            *buffer.Buffer
 	spaced         bool // include spaces after colons and commas
@@ -67,63 +68,63 @@ type mixedEncoder struct {
 // libraries will ignore duplicate key-value pairs (typically keeping the last
 // pair) when unmarshaling, but users should attempt to avoid adding duplicate
 // keys.
-func NewMixedEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
-	return newMixedEncoder(cfg, false)
+func NewJSONEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
+	return newJSONEncoder(cfg, false)
 }
 
-func newMixedEncoder(cfg zapcore.EncoderConfig, spaced bool) *mixedEncoder {
-	return &mixedEncoder{
+func newJSONEncoder(cfg zapcore.EncoderConfig, spaced bool) *jsonEncoder {
+	return &jsonEncoder{
 		EncoderConfig: &cfg,
 		buf:           bufferpool.Get(),
 		spaced:        spaced,
 	}
 }
 
-func (enc *mixedEncoder) AddArray(key string, arr zapcore.ArrayMarshaler) error {
+func (enc *jsonEncoder) AddArray(key string, arr zapcore.ArrayMarshaler) error {
 	enc.addKey(key)
 	return enc.AppendArray(arr)
 }
 
-func (enc *mixedEncoder) AddObject(key string, obj zapcore.ObjectMarshaler) error {
+func (enc *jsonEncoder) AddObject(key string, obj zapcore.ObjectMarshaler) error {
 	enc.addKey(key)
 	return enc.AppendObject(obj)
 }
 
-func (enc *mixedEncoder) AddBinary(key string, val []byte) {
+func (enc *jsonEncoder) AddBinary(key string, val []byte) {
 	enc.AddString(key, base64.StdEncoding.EncodeToString(val))
 }
 
-func (enc *mixedEncoder) AddByteString(key string, val []byte) {
+func (enc *jsonEncoder) AddByteString(key string, val []byte) {
 	enc.addKey(key)
 	enc.AppendByteString(val)
 }
 
-func (enc *mixedEncoder) AddBool(key string, val bool) {
+func (enc *jsonEncoder) AddBool(key string, val bool) {
 	enc.addKey(key)
 	enc.AppendBool(val)
 }
 
-func (enc *mixedEncoder) AddComplex128(key string, val complex128) {
+func (enc *jsonEncoder) AddComplex128(key string, val complex128) {
 	enc.addKey(key)
 	enc.AppendComplex128(val)
 }
 
-func (enc *mixedEncoder) AddDuration(key string, val time.Duration) {
+func (enc *jsonEncoder) AddDuration(key string, val time.Duration) {
 	enc.addKey(key)
 	enc.AppendDuration(val)
 }
 
-func (enc *mixedEncoder) AddFloat64(key string, val float64) {
+func (enc *jsonEncoder) AddFloat64(key string, val float64) {
 	enc.addKey(key)
 	enc.AppendFloat64(val)
 }
 
-func (enc *mixedEncoder) AddInt64(key string, val int64) {
+func (enc *jsonEncoder) AddInt64(key string, val int64) {
 	enc.addKey(key)
 	enc.AppendInt64(val)
 }
 
-func (enc *mixedEncoder) AddReflected(key string, obj interface{}) error {
+func (enc *jsonEncoder) AddReflected(key string, obj interface{}) error {
 	marshaled, err := json.Marshal(obj)
 	if err != nil {
 		return err
@@ -133,28 +134,28 @@ func (enc *mixedEncoder) AddReflected(key string, obj interface{}) error {
 	return err
 }
 
-func (enc *mixedEncoder) OpenNamespace(key string) {
+func (enc *jsonEncoder) OpenNamespace(key string) {
 	enc.addKey(key)
 	enc.buf.AppendByte('{')
 	enc.openNamespaces++
 }
 
-func (enc *mixedEncoder) AddString(key, val string) {
+func (enc *jsonEncoder) AddString(key, val string) {
 	enc.addKey(key)
 	enc.AppendString(val)
 }
 
-func (enc *mixedEncoder) AddTime(key string, val time.Time) {
+func (enc *jsonEncoder) AddTime(key string, val time.Time) {
 	enc.addKey(key)
 	enc.AppendTime(val)
 }
 
-func (enc *mixedEncoder) AddUint64(key string, val uint64) {
+func (enc *jsonEncoder) AddUint64(key string, val uint64) {
 	enc.addKey(key)
 	enc.AppendUint64(val)
 }
 
-func (enc *mixedEncoder) AppendArray(arr zapcore.ArrayMarshaler) error {
+func (enc *jsonEncoder) AppendArray(arr zapcore.ArrayMarshaler) error {
 	enc.addElementSeparator()
 	enc.buf.AppendByte('[')
 	err := arr.MarshalLogArray(enc)
@@ -162,7 +163,7 @@ func (enc *mixedEncoder) AppendArray(arr zapcore.ArrayMarshaler) error {
 	return err
 }
 
-func (enc *mixedEncoder) AppendObject(obj zapcore.ObjectMarshaler) error {
+func (enc *jsonEncoder) AppendObject(obj zapcore.ObjectMarshaler) error {
 	enc.addElementSeparator()
 	enc.buf.AppendByte('{')
 	err := obj.MarshalLogObject(enc)
@@ -170,19 +171,19 @@ func (enc *mixedEncoder) AppendObject(obj zapcore.ObjectMarshaler) error {
 	return err
 }
 
-func (enc *mixedEncoder) AppendBool(val bool) {
+func (enc *jsonEncoder) AppendBool(val bool) {
 	enc.addElementSeparator()
 	enc.buf.AppendBool(val)
 }
 
-func (enc *mixedEncoder) AppendByteString(val []byte) {
+func (enc *jsonEncoder) AppendByteString(val []byte) {
 	enc.addElementSeparator()
 	enc.buf.AppendByte('"')
 	enc.safeAddByteString(val)
 	enc.buf.AppendByte('"')
 }
 
-func (enc *mixedEncoder) AppendComplex128(val complex128) {
+func (enc *jsonEncoder) AppendComplex128(val complex128) {
 	enc.addElementSeparator()
 	// Cast to a platform-independent, fixed-size type.
 	r, i := float64(real(val)), float64(imag(val))
@@ -196,7 +197,7 @@ func (enc *mixedEncoder) AppendComplex128(val complex128) {
 	enc.buf.AppendByte('"')
 }
 
-func (enc *mixedEncoder) AppendDuration(val time.Duration) {
+func (enc *jsonEncoder) AppendDuration(val time.Duration) {
 	cur := enc.buf.Len()
 	enc.EncodeDuration(val, enc)
 	if cur == enc.buf.Len() {
@@ -206,12 +207,12 @@ func (enc *mixedEncoder) AppendDuration(val time.Duration) {
 	}
 }
 
-func (enc *mixedEncoder) AppendInt64(val int64) {
+func (enc *jsonEncoder) AppendInt64(val int64) {
 	enc.addElementSeparator()
 	enc.buf.AppendInt(val)
 }
 
-func (enc *mixedEncoder) AppendReflected(val interface{}) error {
+func (enc *jsonEncoder) AppendReflected(val interface{}) error {
 	marshaled, err := json.Marshal(val)
 	if err != nil {
 		return err
@@ -221,14 +222,14 @@ func (enc *mixedEncoder) AppendReflected(val interface{}) error {
 	return err
 }
 
-func (enc *mixedEncoder) AppendString(val string) {
+func (enc *jsonEncoder) AppendString(val string) {
 	enc.addElementSeparator()
 	enc.buf.AppendByte('"')
 	enc.safeAddString(val)
 	enc.buf.AppendByte('"')
 }
 
-func (enc *mixedEncoder) AppendTime(val time.Time) {
+func (enc *jsonEncoder) AppendTime(val time.Time) {
 	cur := enc.buf.Len()
 	enc.EncodeTime(val, enc)
 	if cur == enc.buf.Len() {
@@ -238,43 +239,43 @@ func (enc *mixedEncoder) AppendTime(val time.Time) {
 	}
 }
 
-func (enc *mixedEncoder) AppendUint64(val uint64) {
+func (enc *jsonEncoder) AppendUint64(val uint64) {
 	enc.addElementSeparator()
 	enc.buf.AppendUint(val)
 }
 
-func (enc *mixedEncoder) AddComplex64(k string, v complex64) { enc.AddComplex128(k, complex128(v)) }
-func (enc *mixedEncoder) AddFloat32(k string, v float32)     { enc.AddFloat64(k, float64(v)) }
-func (enc *mixedEncoder) AddInt(k string, v int)             { enc.AddInt64(k, int64(v)) }
-func (enc *mixedEncoder) AddInt32(k string, v int32)         { enc.AddInt64(k, int64(v)) }
-func (enc *mixedEncoder) AddInt16(k string, v int16)         { enc.AddInt64(k, int64(v)) }
-func (enc *mixedEncoder) AddInt8(k string, v int8)           { enc.AddInt64(k, int64(v)) }
-func (enc *mixedEncoder) AddUint(k string, v uint)           { enc.AddUint64(k, uint64(v)) }
-func (enc *mixedEncoder) AddUint32(k string, v uint32)       { enc.AddUint64(k, uint64(v)) }
-func (enc *mixedEncoder) AddUint16(k string, v uint16)       { enc.AddUint64(k, uint64(v)) }
-func (enc *mixedEncoder) AddUint8(k string, v uint8)         { enc.AddUint64(k, uint64(v)) }
-func (enc *mixedEncoder) AddUintptr(k string, v uintptr)     { enc.AddUint64(k, uint64(v)) }
-func (enc *mixedEncoder) AppendComplex64(v complex64)        { enc.AppendComplex128(complex128(v)) }
-func (enc *mixedEncoder) AppendFloat64(v float64)            { enc.appendFloat(v, 64) }
-func (enc *mixedEncoder) AppendFloat32(v float32)            { enc.appendFloat(float64(v), 32) }
-func (enc *mixedEncoder) AppendInt(v int)                    { enc.AppendInt64(int64(v)) }
-func (enc *mixedEncoder) AppendInt32(v int32)                { enc.AppendInt64(int64(v)) }
-func (enc *mixedEncoder) AppendInt16(v int16)                { enc.AppendInt64(int64(v)) }
-func (enc *mixedEncoder) AppendInt8(v int8)                  { enc.AppendInt64(int64(v)) }
-func (enc *mixedEncoder) AppendUint(v uint)                  { enc.AppendUint64(uint64(v)) }
-func (enc *mixedEncoder) AppendUint32(v uint32)              { enc.AppendUint64(uint64(v)) }
-func (enc *mixedEncoder) AppendUint16(v uint16)              { enc.AppendUint64(uint64(v)) }
-func (enc *mixedEncoder) AppendUint8(v uint8)                { enc.AppendUint64(uint64(v)) }
-func (enc *mixedEncoder) AppendUintptr(v uintptr)            { enc.AppendUint64(uint64(v)) }
+func (enc *jsonEncoder) AddComplex64(k string, v complex64) { enc.AddComplex128(k, complex128(v)) }
+func (enc *jsonEncoder) AddFloat32(k string, v float32)     { enc.AddFloat64(k, float64(v)) }
+func (enc *jsonEncoder) AddInt(k string, v int)             { enc.AddInt64(k, int64(v)) }
+func (enc *jsonEncoder) AddInt32(k string, v int32)         { enc.AddInt64(k, int64(v)) }
+func (enc *jsonEncoder) AddInt16(k string, v int16)         { enc.AddInt64(k, int64(v)) }
+func (enc *jsonEncoder) AddInt8(k string, v int8)           { enc.AddInt64(k, int64(v)) }
+func (enc *jsonEncoder) AddUint(k string, v uint)           { enc.AddUint64(k, uint64(v)) }
+func (enc *jsonEncoder) AddUint32(k string, v uint32)       { enc.AddUint64(k, uint64(v)) }
+func (enc *jsonEncoder) AddUint16(k string, v uint16)       { enc.AddUint64(k, uint64(v)) }
+func (enc *jsonEncoder) AddUint8(k string, v uint8)         { enc.AddUint64(k, uint64(v)) }
+func (enc *jsonEncoder) AddUintptr(k string, v uintptr)     { enc.AddUint64(k, uint64(v)) }
+func (enc *jsonEncoder) AppendComplex64(v complex64)        { enc.AppendComplex128(complex128(v)) }
+func (enc *jsonEncoder) AppendFloat64(v float64)            { enc.appendFloat(v, 64) }
+func (enc *jsonEncoder) AppendFloat32(v float32)            { enc.appendFloat(float64(v), 32) }
+func (enc *jsonEncoder) AppendInt(v int)                    { enc.AppendInt64(int64(v)) }
+func (enc *jsonEncoder) AppendInt32(v int32)                { enc.AppendInt64(int64(v)) }
+func (enc *jsonEncoder) AppendInt16(v int16)                { enc.AppendInt64(int64(v)) }
+func (enc *jsonEncoder) AppendInt8(v int8)                  { enc.AppendInt64(int64(v)) }
+func (enc *jsonEncoder) AppendUint(v uint)                  { enc.AppendUint64(uint64(v)) }
+func (enc *jsonEncoder) AppendUint32(v uint32)              { enc.AppendUint64(uint64(v)) }
+func (enc *jsonEncoder) AppendUint16(v uint16)              { enc.AppendUint64(uint64(v)) }
+func (enc *jsonEncoder) AppendUint8(v uint8)                { enc.AppendUint64(uint64(v)) }
+func (enc *jsonEncoder) AppendUintptr(v uintptr)            { enc.AppendUint64(uint64(v)) }
 
-func (enc *mixedEncoder) Clone() zapcore.Encoder {
+func (enc *jsonEncoder) Clone() zapcore.Encoder {
 	clone := enc.clone()
 	clone.buf.Write(enc.buf.Bytes())
 	return clone
 }
 
-func (enc *mixedEncoder) clone() *mixedEncoder {
-	clone := getMixedEncoder()
+func (enc *jsonEncoder) clone() *jsonEncoder {
+	clone := getJSONEncoder()
 	clone.EncoderConfig = enc.EncoderConfig
 	clone.spaced = enc.spaced
 	clone.openNamespaces = enc.openNamespaces
@@ -282,64 +283,41 @@ func (enc *mixedEncoder) clone() *mixedEncoder {
 	return clone
 }
 
-func addFields(enc zapcore.ObjectEncoder, fields []zapcore.Field) {
-	for i := range fields {
-		fields[i].AddTo(enc)
-	}
-}
-
-func (enc *mixedEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
+func (enc *jsonEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	final := enc.clone()
-
-	wr := getDirectWriteEncoder()
-	wr.buf = final.buf
-
-	if enc.TimeKey != "" && enc.EncodeTime != nil {
-		final.buf.AppendByte('[')
-		enc.EncodeTime(ent.Time, wr)
-		final.buf.AppendByte(']')
-	}
-
-	if enc.LevelKey != "" && enc.EncodeLevel != nil {
-		if final.buf.Len() > 0 {
-			final.buf.AppendByte(' ')
-		}
-		enc.EncodeLevel(ent.Level, wr)
-	}
-
-	if ent.LoggerName != "" && enc.NameKey != "" {
-		if final.buf.Len() > 0 {
-			final.buf.AppendByte(' ')
-		}
-		final.buf.AppendByte('[')
-		wr.AppendString(ent.LoggerName)
-		final.buf.AppendByte(']')
-	}
-
-	if ent.Caller.Defined && enc.CallerKey != "" && enc.EncodeCaller != nil {
-		if final.buf.Len() > 0 {
-			final.buf.AppendByte(' ')
-		}
-		enc.EncodeCaller(ent.Caller, wr)
-		final.buf.AppendByte(' ')
-	}
-
-	putDirectWriteEncoder(wr)
-
-	// Add the message itself.
-	if final.MessageKey != "" {
-		if final.buf.Len() > 0 {
-			final.buf.AppendByte(' ')
-		}
-		final.buf.AppendString(ent.Message)
-	}
-
-	if final.buf.Len() > 0 {
-		final.buf.AppendByte(' ')
-	}
-
 	final.buf.AppendByte('{')
 
+	if final.LevelKey != "" {
+		final.addKey(final.LevelKey)
+		cur := final.buf.Len()
+		final.EncodeLevel(ent.Level, final)
+		if cur == final.buf.Len() {
+			// User-supplied EncodeLevel was a no-op. Fall back to strings to keep
+			// output JSON valid.
+			final.AppendString(ent.Level.String())
+		}
+	}
+	if final.TimeKey != "" {
+		final.AddTime(final.TimeKey, ent.Time)
+	}
+	if ent.LoggerName != "" && final.NameKey != "" {
+		final.addKey(final.NameKey)
+		final.AppendString(ent.LoggerName)
+	}
+	if ent.Caller.Defined && final.CallerKey != "" {
+		final.addKey(final.CallerKey)
+		cur := final.buf.Len()
+		final.EncodeCaller(ent.Caller, final)
+		if cur == final.buf.Len() {
+			// User-supplied EncodeCaller was a no-op. Fall back to strings to
+			// keep output JSON valid.
+			final.AppendString(ent.Caller.String())
+		}
+	}
+	if final.MessageKey != "" {
+		final.addKey(enc.MessageKey)
+		final.AppendString(ent.Message)
+	}
 	if enc.buf.Len() > 0 {
 		final.addElementSeparator()
 		final.buf.Write(enc.buf.Bytes())
@@ -353,21 +331,21 @@ func (enc *mixedEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) 
 	final.buf.AppendByte('\n')
 
 	ret := final.buf
-	putMixedEncoder(final)
+	putJSONEncoder(final)
 	return ret, nil
 }
 
-func (enc *mixedEncoder) truncate() {
+func (enc *jsonEncoder) truncate() {
 	enc.buf.Reset()
 }
 
-func (enc *mixedEncoder) closeOpenNamespaces() {
+func (enc *jsonEncoder) closeOpenNamespaces() {
 	for i := 0; i < enc.openNamespaces; i++ {
 		enc.buf.AppendByte('}')
 	}
 }
 
-func (enc *mixedEncoder) addKey(key string) {
+func (enc *jsonEncoder) addKey(key string) {
 	enc.addElementSeparator()
 	enc.buf.AppendByte('"')
 	enc.safeAddString(key)
@@ -378,7 +356,7 @@ func (enc *mixedEncoder) addKey(key string) {
 	}
 }
 
-func (enc *mixedEncoder) addElementSeparator() {
+func (enc *jsonEncoder) addElementSeparator() {
 	last := enc.buf.Len() - 1
 	if last < 0 {
 		return
@@ -394,7 +372,7 @@ func (enc *mixedEncoder) addElementSeparator() {
 	}
 }
 
-func (enc *mixedEncoder) appendFloat(val float64, bitSize int) {
+func (enc *jsonEncoder) appendFloat(val float64, bitSize int) {
 	enc.addElementSeparator()
 	switch {
 	case math.IsNaN(val):
@@ -411,7 +389,7 @@ func (enc *mixedEncoder) appendFloat(val float64, bitSize int) {
 // safeAddString JSON-escapes a string and appends it to the internal buffer.
 // Unlike the standard library's encoder, it doesn't attempt to protect the
 // user from browser vulnerabilities or JSONP-related problems.
-func (enc *mixedEncoder) safeAddString(s string) {
+func (enc *jsonEncoder) safeAddString(s string) {
 	for i := 0; i < len(s); {
 		if enc.tryAddRuneSelf(s[i]) {
 			i++
@@ -428,7 +406,7 @@ func (enc *mixedEncoder) safeAddString(s string) {
 }
 
 // safeAddByteString is no-alloc equivalent of safeAddString(string(s)) for s []byte.
-func (enc *mixedEncoder) safeAddByteString(s []byte) {
+func (enc *jsonEncoder) safeAddByteString(s []byte) {
 	for i := 0; i < len(s); {
 		if enc.tryAddRuneSelf(s[i]) {
 			i++
@@ -445,7 +423,7 @@ func (enc *mixedEncoder) safeAddByteString(s []byte) {
 }
 
 // tryAddRuneSelf appends b if it is valid UTF-8 character represented in a single byte.
-func (enc *mixedEncoder) tryAddRuneSelf(b byte) bool {
+func (enc *jsonEncoder) tryAddRuneSelf(b byte) bool {
 	if b >= utf8.RuneSelf {
 		return false
 	}
@@ -475,7 +453,7 @@ func (enc *mixedEncoder) tryAddRuneSelf(b byte) bool {
 	return true
 }
 
-func (enc *mixedEncoder) tryAddRuneError(r rune, size int) bool {
+func (enc *jsonEncoder) tryAddRuneError(r rune, size int) bool {
 	if r == utf8.RuneError && size == 1 {
 		enc.buf.AppendString(`\ufffd`)
 		return true
