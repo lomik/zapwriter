@@ -131,7 +131,7 @@ func makeManager(conf []Config, checkOnly bool, allowNames []string) (Manager, e
 			return nil, err
 		}
 
-		if _, ok := m.loggers[cfg.Logger]; !ok {
+		if _, ok := m.cores[cfg.Logger]; !ok {
 			m.cores[cfg.Logger] = make([]zapcore.Core, 0)
 		}
 
