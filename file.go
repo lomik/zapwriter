@@ -184,7 +184,7 @@ func PrepareFileForUser(filename string, owner *user.User) error {
 		return err
 	}
 
-	if u.Path == "" || u.Path == "stderr" || u.Path == "stdout" {
+	if u.Path == "" || u.Path == "stderr" || u.Path == "stdout" || u.Path == "none" {
 		return nil
 	}
 
