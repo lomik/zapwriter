@@ -141,7 +141,6 @@ func (c *Config) encoder() (zapcore.Encoder, zap.AtomicLevel, error) {
 
 func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 	u, err := url.Parse(c.File)
-
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +163,17 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 		return nil, err
 	}
 
+	core, err := c.core(encoder, ws, atomicLevel)
+	if err != nil {
+		return nil, err
+	}
+
+	return zap.New(core), nil
+}
+
+func (c *Config) core(encoder zapcore.Encoder, ws zapcore.WriteSyncer, atomicLevel zap.AtomicLevel) (zapcore.Core, error) {
 	core := zapcore.NewCore(encoder, ws, atomicLevel)
+
 	if c.SampleTick != "" {
 		if c.SampleThereafter == 0 {
 			return nil, fmt.Errorf("a sample-thereafter value of 0 will cause a runtime divide-by-zero error in zap")
@@ -178,5 +187,5 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 		core = zapcore.NewSampler(core, d, c.SampleInitial, c.SampleThereafter)
 	}
 
-	return zap.New(core), nil
+	return core, nil
 }
