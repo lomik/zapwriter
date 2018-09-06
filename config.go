@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+// Config configures a zapwriter.
+//
+// If SampleTick is defined, the Sample* parameters are passed to
+// zapcore.NewSampler. See their documentation for details.
 type Config struct {
 	Logger           string `toml:"logger" json:"logger"`                       // handler name, default empty
 	File             string `toml:"file" json:"file"`                           // filename, "stderr", "stdout", "empty" (=="stderr"), "none"
@@ -16,6 +21,9 @@ type Config struct {
 	Encoding         string `toml:"encoding" json:"encoding"`                   // "json", "console"
 	EncodingTime     string `toml:"encoding-time" json:"encoding-time"`         // "millis", "nanos", "epoch", "iso8601"
 	EncodingDuration string `toml:"encoding-duration" json:"encoding-duration"` // "seconds", "nanos", "string"
+	SampleTick       string `toml:"sample-tick" json:"sample-tick"`             // passed to time.ParseDuration
+	SampleInitial    int    `toml:"sample-initial" json:"sample-initial"`       // first n messages logged per tick
+	SampleThereafter int    `toml:"sample-thereafter" json:"sample-thereafter"` // every m-th message logged thereafter per tick
 }
 
 func NewConfig() Config {
@@ -157,6 +165,18 @@ func (c *Config) build(checkOnly bool) (*zap.Logger, error) {
 	}
 
 	core := zapcore.NewCore(encoder, ws, atomicLevel)
+	if c.SampleTick != "" {
+		if c.SampleThereafter == 0 {
+			return nil, fmt.Errorf("a sample-thereafter value of 0 will cause a runtime divide-by-zero error in zap")
+		}
+
+		d, err := time.ParseDuration(c.SampleTick)
+		if err != nil {
+			return nil, err
+		}
+
+		core = zapcore.NewSampler(core, d, c.SampleInitial, c.SampleThereafter)
+	}
 
 	return zap.New(core), nil
 }
