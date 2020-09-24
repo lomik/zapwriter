@@ -4,7 +4,10 @@ import (
 	"fmt"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/lomik/zapwriter"
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"net/url"
+	"os"
 )
 
 const schemaName = "mqtt"
@@ -12,22 +15,24 @@ const schemaName = "mqtt"
 var protocols = []string{"tcp", "ws", "wss"}
 
 type MQTTOutput struct {
-	Client MQTT.Client
-	topic  string
-	sync   bool
+	Client   MQTT.Client
+	topic    string
+	sync     bool
+	qos      byte
+	retained bool
 
 	errorLogger string
 }
 
 func (mq *MQTTOutput) writeSync(b []byte) (int, error) {
-	token := mq.Client.Publish(mq.topic, byte(0), false, b)
+	token := mq.Client.Publish(mq.topic, mq.qos, mq.retained, b)
 	token.Wait()
 
 	return len(b), nil
 }
 
 func (mq *MQTTOutput) writeAsync(b []byte) (int, error) {
-	mq.Client.Publish(mq.topic, byte(0), false, b)
+	mq.Client.Publish(mq.topic, mq.qos, mq.retained, b)
 
 	return len(b), nil
 }
@@ -47,6 +52,10 @@ func (mq *MQTTOutput) Sync() error {
 func (mq *MQTTOutput) Close() error {
 	panic("implement")
 }
+
+// topic, protocol, client_id are requited params
+// store is a path to dir where you want to save messages
+// if store is not set then memory is using
 
 func validateParams(obj *zapwriter.DsnObj) error {
 	protocol, _ := obj.String("protocol", "")
@@ -76,16 +85,6 @@ func inSlice(key string, sl []string) bool {
 
 	return false
 }
-
-//broker = ip:port
-//protocol = tcp|ws|wss
-//user
-//password
-//client_id
-//store?
-//sync async?
-
-//req: broker, protocol, client_id
 
 func NewOutput(path string) (zapwriter.Output, error) {
 	u, err := url.Parse(path)
@@ -123,11 +122,30 @@ func NewOutput(path string) (zapwriter.Output, error) {
 
 	user, _ := params.String("user", "")
 	password, _ := params.String("password", "")
+	store, _ := params.String("store", "")
+	if store != "" {
+		// create dir if not exists
+		if _, err := os.Stat(store); err != nil {
+			if os.IsNotExist(err) {
+				perms := os.FileMode(0770)
+				makeErr := os.MkdirAll(store, perms)
+				if makeErr != nil {
+					return nil, makeErr
+				}
+			}
+		} else {
+			// check perms
+			if accessErr := unix.Access(store, unix.R_OK|unix.W_OK); accessErr != nil {
+				return nil, errors.Wrapf(accessErr, "check permission for path `%v`", store)
+			}
+		}
+		opts.SetStore(MQTT.NewFileStore(store))
+	}
+
+	retained, _ := params.Bool("retained", false)
 
 	opts.SetUsername(user)
 	opts.SetPassword(password)
-
-	// todo: other params~?
 
 	client := MQTT.NewClient(opts)
 
@@ -141,9 +159,11 @@ func NewOutput(path string) (zapwriter.Output, error) {
 	}
 
 	output := &MQTTOutput{
-		Client: client,
-		topic:  topic,
-		sync:   sync,
+		Client:   client,
+		topic:    topic,
+		sync:     sync,
+		qos:      byte(qos),
+		retained: retained,
 
 		errorLogger: errorLogger,
 	}
