@@ -5,6 +5,7 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/lomik/zapwriter"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 	"net/url"
 	"os"
@@ -26,23 +27,34 @@ type MQTTOutput struct {
 
 func (mq *MQTTOutput) writeSync(b []byte) (int, error) {
 	token := mq.Client.Publish(mq.topic, mq.qos, mq.retained, b)
+	if token.Error() != nil {
+		zapwriter.Logger(mq.errorLogger).Error("writeSync", zap.Error(token.Error()))
+		return 0, token.Error()
+	}
 	token.Wait()
 
 	return len(b), nil
 }
 
 func (mq *MQTTOutput) writeAsync(b []byte) (int, error) {
-	mq.Client.Publish(mq.topic, mq.qos, mq.retained, b)
+	token := mq.Client.Publish(mq.topic, mq.qos, mq.retained, b)
+	if token.Error() != nil {
+		zapwriter.Logger(mq.errorLogger).Error("writeAsync", zap.Error(token.Error()))
+		return 0, token.Error()
+	}
 
 	return len(b), nil
 }
 
 func (mq *MQTTOutput) Write(b []byte) (int, error) {
+	// data race fix
+	m := make([]byte, len(b))
+	copy(m, b)
 	if mq.sync {
-		return mq.writeSync(b)
+		return mq.writeSync(m)
 	}
 
-	return mq.writeAsync(b)
+	return mq.writeAsync(m)
 }
 
 func (mq *MQTTOutput) Sync() error {
@@ -50,11 +62,11 @@ func (mq *MQTTOutput) Sync() error {
 }
 
 func (mq *MQTTOutput) Close() error {
-	panic("implement")
+	return nil
 }
 
-// topic, protocol, client_id are requited params
-// store is a path to dir where you want to save messages
+// topic, protocol, client_id are requited params.
+// store is a path to dir where you want to save messages.
 // if store is not set then memory is using
 
 func validateParams(obj *zapwriter.DsnObj) error {

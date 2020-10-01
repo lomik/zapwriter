@@ -2,13 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"time"
-
-	"go.uber.org/zap"
-
 	"github.com/lomik/zapwriter"
 	_ "github.com/lomik/zapwriter/mqtt"
+	"go.uber.org/zap"
+	"log"
+	"time"
 )
 
 func main() {
@@ -23,7 +21,6 @@ func main() {
 	if err := zapwriter.ApplyConfig(config); err != nil {
 		log.Fatal(err)
 	}
-
 	for {
 		zapwriter.Logger("mqttlogger").Error("error message",
 			zap.Error(fmt.Errorf("error object")),
