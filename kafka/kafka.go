@@ -252,14 +252,17 @@ func (r *KafkaOutput) writeAsync(p []byte) (int, error) {
 }
 
 func (r *KafkaOutput) Write(p []byte) (n int, err error) {
+	// data race fix
+	m := make([]byte, len(p))
+	copy(m, p)
 	if r.sync {
-		n, err = r.writeSync(p)
+		n, err = r.writeSync(m)
 	} else {
-		n, err = r.writeAsync(p)
+		n, err = r.writeAsync(m)
 	}
 
 	if err != nil && r.errorLogger != "" {
-		zapwriter.Logger(r.errorLogger).Error("send to kafka failed", zap.String("message", string(p)), zap.Error(err))
+		zapwriter.Logger(r.errorLogger).Error("send to kafka failed", zap.String("message", string(m)), zap.Error(err))
 	}
 	return
 }
